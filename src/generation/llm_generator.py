@@ -1,8 +1,9 @@
 """
 LLM-based synthetic data generator for insurance letters
-This is a mock implementation for the clean repository
+Real OpenAI API implementation using gpt-4o-mini with structured output
 """
 
+import os
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Optional
@@ -10,243 +11,344 @@ import random
 import logging
 import json
 import re
+from pydantic import BaseModel, Field
+from openai import OpenAI
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
-class MockLLMGenerator:
+class InsuranceLetterOutput(BaseModel):
+    """Pydantic model for structured output generation"""
+    letter_text: str = Field(description="Generated insurance letter text")
+    quality_score: float = Field(description="Self-assessed quality score from model (0.0-1.0)")
+    reasoning: str = Field(description="Model's reasoning about how it created this letter")
+
+
+class LLMGenerator:
     """
-    Mock LLM генератор синтетических гарантийных писем
-    Имитирует работу GPT-4 для демонстrationных целей
+    Real LLM-based generator for synthetic insurance letters using OpenAI API
     """
     
     def __init__(self, model_name: str = "gpt-4o-mini", api_key: Optional[str] = None):
+        """
+        Initialize the LLM generator
+        
+        Args:
+            model_name: OpenAI model name to use
+            api_key: OpenAI API key (if not provided, will use OPENAI_API_KEY env var)
+        """
         self.model_name = model_name
-        self.api_key = api_key
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         
-        # Предопределенные высококачественные примеры для имитации LLM
-        self.class_0_examples = [
-            "СОГАЗ\n\nОрганизовать необходимые медицинские исследования для пациента в рамках программы добровольного медицинского страхования. Обеспечить проведение консультаций специалистов согласно полису ДМС.",
-            "Ингосстрах\n\nПросим организовать приемы врача и диагностические процедуры для застрахованного лица. Все мероприятия должны проводиться в рамках стандартной программы страхования.",
-            "СОГАЗ-Мед\n\nТребуется проведение лечебных процедур и консультаций врачей согласно условиям договора медицинского страхования. Организовать необходимые лабораторные исследования.",
+        if not self.api_key:
+            raise ValueError(
+                "OpenAI API key not found. Set OPENAI_API_KEY environment variable "
+                "or pass api_key to constructor"
+            )
+        
+        self.client = OpenAI(api_key=self.api_key)
+        
+        # Components for generation
+        self.companies = ["СОГАЗ", "Ингосстрах", "РЕСО-Гарантия", "АльфаСтрахование"]
+        self.service_code_prefixes = [
+            "F59", "F70", "F55", "F71", "F72", "F73", "F74", "F75"
         ]
         
-        self.class_1_examples = [
-            "СОГАЗ\n\nПросим организовать оплату следующих медицинских услуг:\nF12.34.56.7.890 - Консультация кардиолога\nF23.45.67.8.901 - ЭКГ в покое\nF34.56.78.9.012 - Эхокардиография\n\nДиагноз: Ишемическая болезнь сердца",
-            "Ингосстрах\n\nОплатить медицинские услуги по кодам:\nF45.67.89.0.123 - Общий анализ крови\nF56.78.90.1.234 - Биохимический анализ\nF67.89.01.2.345 - Консультация терапевта\n\nПо результатам экспертизы: Хроническое заболевание",
-            "СОГАЗ\n\nГарантируем оплату услуг:\nF78.90.12.3.456 - УЗИ органов брюшной полости\nF89.01.23.4.567 - ФГДС\nF90.12.34.5.678 - Консультация гастроэнтеролога\n\nДиагностическое заключение: Заболевания ЖКТ",
-        ]
+    def _generate_service_codes(self, num_codes: int = None) -> List[str]:
+        """Generate medical service codes in format F##.##.##.#.###"""
+        if num_codes is None:
+            num_codes = random.randint(1, 4)
         
-        # Компоненты для генерации разнообразного контента
-        self.companies = ["СОГАЗ", "Ингосстрах", "СОГАЗ-Мед", "ИНГОССТРАХ"]
-        self.diagnoses = [
-            "Ишемическая болезнь сердца",
-            "Гипертоническая болезнь",
-            "Хроническое заболевание",
-            "Острое состояние",
-            "Профилактическое обследование",
-            "Заболевания ЖКТ",
-            "Неврологические нарушения",
-            "Эндокринные расстройства"
-        ]
+        codes = []
+        for _ in range(num_codes):
+            prefix = random.choice(self.service_code_prefixes)
+            code = f"{prefix}.{random.randint(10, 99)}.{random.randint(10, 99)}.{random.randint(0, 9)}.{random.randint(100, 999)}"
+            codes.append(code)
         
-    def generate_service_code(self) -> str:
-        """Генерация одного кода услуги"""
-        return f"F{random.randint(10, 99)}.{random.randint(10, 99)}.{random.randint(10, 99)}.{random.randint(0, 9)}.{random.randint(100, 999)}"
-    
-    def generate_service_with_name(self) -> str:
-        """Генерация кода услуги с названием"""
-        services = [
-            "Консультация кардиолога",
-            "Консультация терапевта", 
-            "Консультация невролога",
-            "ЭКГ в покое",
-            "Эхокардиография",
-            "УЗИ органов брюшной полости",
-            "Общий анализ крови",
-            "Биохимический анализ",
-            "ФГДС",
-            "Рентгенография",
-            "МРТ головного мозга",
-            "КТ органов грудной клетки"
-        ]
-        
-        code = self.generate_service_code()
-        service_name = random.choice(services)
-        return f"{code} - {service_name}"
+        return codes
     
     def generate_class_0_letter(self, company: str = None) -> Dict[str, Any]:
         """
-        Генерация письма класса 0 с имитацией LLM качества
+        Generate class 0 letter (general requests without service codes)
         
         Returns:
-            словарь с текстом и метаданными
+            Dictionary with letter text and metadata
         """
         if company is None:
             company = random.choice(self.companies)
         
-        # Выбираем базовый пример и модифицируем его
-        base_example = random.choice(self.class_0_examples)
-        
-        # Заменяем компанию
-        for comp in self.companies:
-            if comp in base_example:
-                letter_text = base_example.replace(comp, company)
-                break
-        else:
-            letter_text = base_example
-        
-        # Добавляем небольшие вариации
-        variations = [
-            ("необходимые медицинские исследования", "требуемые диагностические процедуры"),
-            ("в рамках программы", "согласно условиям программы"),
-            ("застрахованного лица", "пациента"),
-            ("приемы врача", "консультации специалистов"),
-            ("лечебных процедур", "терапевтических мероприятий")
-        ]
-        
-        for original, replacement in variations:
-            if random.random() < 0.3:  # 30% шанс замены
-                letter_text = letter_text.replace(original, replacement)
-        
-        return {
-            'text': letter_text,
-            'class': 0,
-            'quality_score': random.uniform(0.85, 0.95),
-            'confidence': random.uniform(0.9, 1.0),
-            'generation_method': 'llm_mock'
-        }
+        system_prompt = """You are an expert in composing insurance documents in Russia. 
+Your task is to create a realistic guarantee letter from an insurance company without specifying specific medical service codes.
+The letter should contain a general request for organizing medical care."""
+
+        user_prompt = f"""Create a guarantee letter from insurance company {company}.
+
+Requirements:
+- The letter should contain ONLY general phrases like "organize medical care", "necessary examinations", "specialist consultations"
+- DO NOT specify specific medical service codes (format F##.##.##.#.###)
+- Use official business style
+- Length: 2-4 sentences
+- Include reference to voluntary medical insurance program
+
+Also assess the quality of the created letter and explain your approach to creating it."""
+
+        try:
+            completion = self.client.beta.chat.completions.parse(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format=InsuranceLetterOutput,
+                temperature=0.7,
+                max_tokens=400
+            )
+            
+            result = completion.choices[0].message.parsed
+            
+            return {
+                'letter_id': f'synthetic_llm_0_{random.randint(1000, 9999)}',
+                'guarantee_letter_text': result.letter_text,
+                'class': 0,
+                'quality_score': result.quality_score,
+                'reasoning': result.reasoning,
+                'generation_method': 'llm'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating class 0 letter: {e}")
+            return self._fallback_class_0_letter(company)
     
     def generate_class_1_letter(self, company: str = None, num_services: int = None) -> Dict[str, Any]:
         """
-        Генерация письма класса 1 с имитацией LLM качества
+        Generate class 1 letter (with service codes)
         
         Returns:
-            словарь с текстом и метаданными
+            Dictionary with letter text and metadata
         """
         if company is None:
             company = random.choice(self.companies)
         
-        if num_services is None:
-            num_services = random.randint(2, 5)
+        service_codes = self._generate_service_codes(num_services)
         
-        # Генерируем услуги с кодами
-        services = []
-        for _ in range(num_services):
-            services.append(self.generate_service_with_name())
-        
-        # Выбираем шаблон
+        system_prompt = """You are an expert in composing insurance documents in Russia.
+Your task is to create a realistic guarantee letter from an insurance company with specific medical service codes.
+The letter should contain a list of specific medical services with their codes."""
+
+        user_prompt = f"""Create a guarantee letter from insurance company {company}.
+
+Requirements:
+- MUST include the following service codes: {', '.join(service_codes)}
+- The letter should contain a specific list of medical services
+- Use official business style
+- Length: 3-5 sentences
+- You can add diagnosis or indications
+- Include information about payment under voluntary medical insurance policy
+
+Also assess the quality of the created letter and explain your approach to creating it."""
+
+        try:
+            completion = self.client.beta.chat.completions.parse(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format=InsuranceLetterOutput,
+                temperature=0.7,
+                max_tokens=500
+            )
+            
+            result = completion.choices[0].message.parsed
+            
+            return {
+                'letter_id': f'synthetic_llm_1_{random.randint(1000, 9999)}',
+                'guarantee_letter_text': result.letter_text,
+                'class': 1,
+                'quality_score': result.quality_score,
+                'reasoning': result.reasoning,
+                'generation_method': 'llm',
+                'service_codes': service_codes
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating class 1 letter: {e}")
+            return self._fallback_class_1_letter(company, service_codes)
+    
+    def _fallback_class_0_letter(self, company: str) -> Dict[str, Any]:
+        """Fallback method for class 0 letter generation"""
         templates = [
-            "{company}\n\nПросим организовать оплату следующих медицинских услуг:\n{services}\n\nДиагноз: {diagnosis}",
-            "{company}\n\nОплатить медицинские услуги по кодам:\n{services}\n\nПо результатам экспертизы: {diagnosis}",
-            "{company}\n\nГарантируем оплату услуг:\n{services}\n\nДиагностическое заключение: {diagnosis}",
-            "{company}\n\nТребуется оплата медицинских процедур:\n{services}\n\nКлиническое заключение: {diagnosis}"
+            f"{company}\n\nОрганизовать необходимые медицинские исследования для пациента в рамках программы добровольного медицинского страхования.",
+            f"{company}\n\nПросим организовать приемы врача и диагностические процедуры для застрахованного лица согласно полису ДМС.",
+            f"{company}\n\nТребуется проведение лечебных процедур и консультаций врачей согласно условиям договора медицинского страхования."
         ]
         
-        template = random.choice(templates)
-        diagnosis = random.choice(self.diagnoses)
-        
-        letter_text = template.format(
-            company=company,
-            services="\n".join(services),
-            diagnosis=diagnosis
-        )
+        return {
+            'letter_id': f'fallback_0_{random.randint(1000, 9999)}',
+            'guarantee_letter_text': random.choice(templates),
+            'class': 0,
+            'quality_score': 0.8,
+            'reasoning': 'Fallback template generation',
+            'generation_method': 'fallback'
+        }
+    
+    def _fallback_class_1_letter(self, company: str, service_codes: List[str]) -> Dict[str, Any]:
+        """Fallback method for class 1 letter generation"""
+        codes_text = '\n'.join(service_codes)
+        letter_text = f"{company}\n\nПросим организовать оплату следующих медицинских услуг:\n{codes_text}\n\nОплата производится в рамках полиса ДМС."
         
         return {
-            'text': letter_text,
+            'letter_id': f'fallback_1_{random.randint(1000, 9999)}',
+            'guarantee_letter_text': letter_text,
             'class': 1,
-            'quality_score': random.uniform(0.88, 0.97),
-            'confidence': random.uniform(0.92, 1.0),
-            'generation_method': 'llm_mock',
-            'num_service_codes': num_services
+            'quality_score': 0.8,
+            'reasoning': 'Fallback template generation',
+            'generation_method': 'fallback',
+            'service_codes': service_codes
         }
     
     def generate_batch(self, class_distribution: Dict[int, int]) -> List[Dict[str, Any]]:
         """
-        Генерация батча синтетических писем
+        Generate batch of synthetic letters
         
         Args:
-            class_distribution: {class: count} - распределение классов
+            class_distribution: {class: count} - class distribution
             
         Returns:
-            список сгенерированных писем
+            list of generated letters
         """
         results = []
         
         for class_label, count in class_distribution.items():
+            logger.info(f"Generating {count} letters for class {class_label}")
             for i in range(count):
                 if class_label == 0:
                     letter_data = self.generate_class_0_letter()
                 else:
                     letter_data = self.generate_class_1_letter()
                 
-                letter_data['letter_id'] = f'llm_mock_{class_label}_{i}'
-                results.append(letter_data)
+                if letter_data:
+                    results.append(letter_data)
+                    if (i + 1) % 5 == 0:
+                        logger.info(f"Generated {i + 1}/{count} letters for class {class_label}")
         
         return results
     
     def generate_synthetic_dataset(self, target_counts: Dict[int, int]) -> pd.DataFrame:
         """
-        Генерация синтетического датасета
+        Generate synthetic dataset
         
         Args:
-            target_counts: количество примеров для каждого класса
+            target_counts: number of examples for each class
             
         Returns:
-            DataFrame с синтетическими данными
+            DataFrame with synthetic data
         """
-        logger.info(f"Generating synthetic dataset with LLM mock: {target_counts}")
+        logger.info(f"Generating synthetic dataset with LLM: {target_counts}")
         
         all_letters = self.generate_batch(target_counts)
         
-        # Конвертируем в DataFrame
+        # Convert to DataFrame
         data_for_df = []
         for letter in all_letters:
             data_for_df.append({
                 'letter_id': letter['letter_id'],
-                'guarantee_letter_text': letter['text'],
+                'guarantee_letter_text': letter['guarantee_letter_text'],
                 'class': letter['class'],
                 'quality_score': letter['quality_score'],
-                'confidence': letter['confidence'],
+                'reasoning': letter.get('reasoning', ''),
                 'generation_method': letter['generation_method']
             })
         
         df = pd.DataFrame(data_for_df)
         
-        # Перемешиваем
+        # Shuffle
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
         
-        logger.info(f"Generated {len(df)} synthetic letters with high quality scores")
+        logger.info(f"Generated {len(df)} synthetic letters")
         logger.info(f"Average quality score: {df['quality_score'].mean():.3f}")
         
         return df
     
-    def validate_quality(self, letters: List[str]) -> List[Dict[str, Any]]:
+    def validate_generation_quality(self, synthetic_df: pd.DataFrame) -> Dict[str, float]:
         """
-        Имитация валидации качества сгенерированных писем
+        Validate quality of generated data
         
         Args:
-            letters: список текстов писем
+            synthetic_df: DataFrame with synthetic data
             
         Returns:
-            список с метриками качества
+            Dictionary with quality metrics
         """
-        results = []
+        if synthetic_df.empty:
+            return {}
         
-        for i, letter in enumerate(letters):
-            # Имитируем проверки качества
-            has_service_codes = bool(re.search(r'F\d{2}\.\d{2}\.\d{2}\.\d\.\d{3}', letter))
-            
-            quality_metrics = {
-                'letter_index': i,
-                'has_service_codes': has_service_codes,
-                'text_length': len(letter),
-                'readability_score': random.uniform(0.7, 0.95),
-                'format_compliance': random.uniform(0.85, 1.0),
-                'domain_relevance': random.uniform(0.9, 1.0),
-                'overall_quality': random.uniform(0.8, 0.95)
-            }
-            
-            results.append(quality_metrics)
+        # Basic metrics
+        metrics = {
+            'total_samples': len(synthetic_df),
+            'avg_quality_score': synthetic_df['quality_score'].mean(),
+            'min_quality_score': synthetic_df['quality_score'].min(),
+            'class_balance': abs(0.5 - (synthetic_df['class'] == 0).mean()),
+        }
         
-        return results
+        # Check presence of service codes in class 1
+        class_1_samples = synthetic_df[synthetic_df['class'] == 1]
+        if not class_1_samples.empty:
+            contains_codes = class_1_samples['guarantee_letter_text'].str.contains(
+                r'F\d{2}\.\d{2}\.\d{2}\.\d\.\d{3}', regex=True
+            ).mean()
+            metrics['class_1_code_presence'] = contains_codes
+        
+        # Check absence of codes in class 0
+        class_0_samples = synthetic_df[synthetic_df['class'] == 0]
+        if not class_0_samples.empty:
+            no_codes = 1 - class_0_samples['guarantee_letter_text'].str.contains(
+                r'F\d{2}\.\d{2}\.\d{2}\.\d\.\d{3}', regex=True
+            ).mean()
+            metrics['class_0_no_codes'] = no_codes
+        
+        return metrics
+
+
+def main():
+    """Test the generator"""
+    
+    # Check for API key
+    if not os.getenv("OPENAI_API_KEY"):
+        print("❌ Set OPENAI_API_KEY environment variable")
+        return
+    
+    try:
+        # Initialize generator
+        generator = LLMGenerator()
+        print("✅ LLM generator initialized")
+        
+        # Test generation of one letter of each class
+        print("\n🧪 Testing generation...")
+        
+        # Class 0
+        letter_0 = generator.generate_class_0_letter()
+        if letter_0:
+            print(f"\n📝 Class 0 letter (quality: {letter_0['quality_score']:.2f}):")
+            print(letter_0['guarantee_letter_text'])
+            print(f"💭 Reasoning: {letter_0['reasoning']}")
+        
+        # Class 1
+        letter_1 = generator.generate_class_1_letter()
+        if letter_1:
+            print(f"\n📝 Class 1 letter (quality: {letter_1['quality_score']:.2f}):")
+            print(letter_1['guarantee_letter_text'])
+            print(f"💭 Reasoning: {letter_1['reasoning']}")
+        
+        print("\n✅ Testing completed successfully!")
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+
+if __name__ == "__main__":
+    main()
