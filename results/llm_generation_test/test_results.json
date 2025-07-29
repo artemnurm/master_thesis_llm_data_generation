@@ -1,0 +1,39 @@
+{
+  "original_data_stats": {
+    "train_size": 162,
+    "class_distribution": {
+      "1": 118,
+      "0": 44
+    }
+  },
+  "single_generation_test": {
+    "class_0_quality": 0.9023828121650228,
+    "class_1_quality": 0.9588714706893652,
+    "class_1_services": 3
+  },
+  "batch_generation_test": {
+    "target_counts": {
+      "0": 10,
+      "1": 15
+    },
+    "generated_counts": {
+      "class_0": 10,
+      "class_1": 15
+    },
+    "average_quality": 0.9177073468931465
+  },
+  "dataset_generation_test": {
+    "target_size": 50,
+    "generated_size": 50,
+    "final_class_distribution": {
+      "1": 30,
+      "0": 20
+    },
+    "average_quality": 0.9151021087155695,
+    "average_confidence": 0.9457335410268978
+  },
+  "quality_validation_test": {
+    "samples_validated": 5,
+    "average_overall_quality": 0.8763123091027587
+  }
+}

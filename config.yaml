@@ -1,0 +1,59 @@
+# Конфигурация экспериментов для классификации страховых писем
+# Воспроизводит эксперименты из диссертации
+
+# Пути к данным
+data_path: "data/raw"
+results_dir: "results"
+
+# Параметры модели
+model:
+  embedding_model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  classifier_type: "logistic"  # "logistic" или "random_forest"
+
+# Эксперименты
+experiments:
+  # Базовый эксперимент (только реальные данные)
+  baseline:
+    enabled: true
+    
+  # Синтетическая аугментация с шаблонами
+  synthetic_augmentation:
+    enabled: true
+    synthetic_sizes: [50, 100, 200, 300]  # размеры синтетических выборок
+    
+  # LLM генерация (mock версия)
+  llm_generation:
+    enabled: true
+    llm_sizes: [50, 100, 150]
+    
+  # Сравнение классификаторов
+  classifier_comparison:
+    enabled: true
+    classifiers: ["logistic", "random_forest"]
+
+# Параметры генерации синтетических данных
+synthetic_generation:
+  template_seed: 42
+  balance_classes: true
+  preserve_class_ratio: true
+
+# Метрики для отчетности
+metrics:
+  primary: ["accuracy", "f1_weighted", "precision_weighted", "recall_weighted"]
+  secondary: ["f1_class_0", "f1_class_1", "precision_class_0", "recall_class_0", "precision_class_1", "recall_class_1"]
+
+# Визуализация
+visualization:
+  create_plots: true
+  save_confusion_matrices: true
+  create_dashboard: true
+  plot_format: "png"
+  plot_dpi: 300
+
+# Логирование
+logging:
+  level: "INFO"
+  save_logs: true
+  
+# Воспроизводимость
+random_seed: 42
